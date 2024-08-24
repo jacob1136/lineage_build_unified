@@ -22,6 +22,7 @@ fi
 
 NOSYNC=false
 PERSONAL=false
+SIGNABLE=true
 for var in "${@:2}"
 do
     if [ ${var} == "nosync" ]
@@ -31,8 +32,14 @@ do
     if [ ${var} == "personal" ]
     then
         PERSONAL=true
+        SIGNABLE=false
     fi
 done
+if [ ! -d "$HOME/.android-certs" ]; then
+    read -n1 -r -p $"\$HOME/.android-certs not found - CTRL-C to exit, or any other key to continue"
+    echo ""
+    SIGNABLE=false
+fi
 
 # Abort early on error
 set -eE
@@ -45,7 +52,7 @@ echo\
 )' ERR
 
 START=`date +%s`
-BUILD_DATE="$(date +%Y%m%d)"
+BUILD_DATE="$(date -u +%Y%m%d)"
 
 prep_build() {
     echo "Preparing local manifests"
@@ -66,9 +73,7 @@ prep_build() {
     repopick 321337 -r -f # Deprioritize important developer notifications
     repopick 321338 -r -f # Allow disabling important developer notifications
     repopick 321339 -r -f # Allow disabling USB notifications
-    repopick 329229 -r -f # Alter model name to avoid SafetyNet HW attestation enforcement
-    repopick 329230 -r -f # keystore: Block key attestation for SafetyNet
-    repopick 331534 -r -f # SystemUI: Add support to add/remove QS tiles with one tap
+    repopick 331534 -r -f # SystemUI: Allow user to add/remove QS with one click
     repopick 331791 -r -f # Skip checking SystemUI's permission for observing sensor privacy
 }
 
@@ -106,15 +111,8 @@ finalize_treble() {
 }
 
 build_device() {
-    if [ ${1} == "arm64" ]
-    then
-        lunch lineage_arm64-userdebug
-        make -j$(lscpu -b -p=Core,Socket | grep -v '^#' | sort -u | wc -l) systemimage
-        mv $OUT/system.img ~/build-output/lineage-19.1-$BUILD_DATE-UNOFFICIAL-arm64$(${PERSONAL} && echo "-personal" || echo "").img
-    else
-        brunch ${1}
-        mv $OUT/lineage-*.zip ~/build-output/lineage-19.1-$BUILD_DATE-UNOFFICIAL-${1}$($PERSONAL && echo "-personal" || echo "").zip
-    fi
+    brunch ${1}
+    mv $OUT/lineage-*.zip ~/build-output/lineage-19.1-$BUILD_DATE-UNOFFICIAL-${1}$($PERSONAL && echo "-personal" || echo "").zip
 }
 
 build_treble() {
@@ -129,8 +127,17 @@ build_treble() {
     esac
     lunch lineage_${TARGET}-userdebug
     make installclean
-    make -j$(nproc --all) systemimage
-    mv $OUT/system.img ~/build-output/lineage-19.1-$BUILD_DATE-UNOFFICIAL-${TARGET}$(${PERSONAL} && echo "-personal" || echo "").img
+    make -j$(lscpu -b -p=Core,Socket | grep -v '^#' | sort -u | wc -l) systemimage
+    SIGNED=false
+    if [ ${SIGNABLE} = true ] && [[ ${TARGET} == *_bg? ]]
+    then
+        make -j$(lscpu -b -p=Core,Socket | grep -v '^#' | sort -u | wc -l) target-files-package otatools
+        bash ./lineage_build_unified/sign_target_files.sh $OUT/signed-target_files.zip
+        unzip -joq $OUT/signed-target_files.zip IMAGES/system.img -d $OUT
+        SIGNED=true
+        echo ""
+    fi
+    mv $OUT/system.img ~/build-output/lineage-19.1-$BUILD_DATE-UNOFFICIAL-${TARGET}$(${PERSONAL} && echo "-personal" || echo "")$(${SIGNED} && echo "-signed" || echo "").img
     make vndk-test-sepolicy
 }
 
