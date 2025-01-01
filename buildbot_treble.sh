@@ -106,7 +106,7 @@ sleep 5
 echo ""
 
 export WITHOUT_CHECK_API=true
-export WITH_SU=true
+export WITH_SU=false
 mkdir -p ~/build-output/
 
 buildVariant() {
@@ -117,12 +117,13 @@ buildVariant() {
 	mv $OUT/system.img ~/build-output/lineage-17.1-$BUILD_DATE-UNOFFICIAL-${1}.img
 }
 
-buildVariant treble_arm_avS
-buildVariant treble_arm_bvS
-buildVariant treble_a64_avS
-buildVariant treble_a64_bvS
-buildVariant treble_arm64_avS
-buildVariant treble_arm64_bvS
+#buildVariant treble_arm_avS
+#buildVariant treble_arm_bvS
+#buildVariant treble_a64_avS
+#buildVariant treble_a64_bvS
+#buildVariant treble_arm64_avS
+#buildVariant treble_arm64_bvS
+buildVariant treble_arm64_bvN
 ls ~/build-output | grep 'lineage'
 
 END=`date +%s`
